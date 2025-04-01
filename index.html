@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NeonBudget</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.png">
+  <meta name="theme-color" content="#0f0f1a">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #0f0f1a;
+      color: #00ffcc;
+    }
+    .container {
+      max-width: 500px;
+      margin: auto;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      font-size: 2.5em;
+      color: #ff00ff;
+      text-shadow: 0 0 10px #ff00ff;
+    }
+    form input,
+    form button,
+    select,
+    #export {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 12px;
+      font-size: 16px;
+      background: #1e1e2e;
+      border: 1px solid #333;
+      border-radius: 5px;
+      color: #00ffcc;
+    }
+    form button,
+    #export {
+      background-color: #ff00ff;
+      color: #0f0f1a;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    form button:hover,
+    #export:hover {
+      background-color: #ff66ff;
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    #expense-list {
+      list-style: none;
+      padding: 0;
+    }
+    .expense-item {
+      background: #1a1a2e;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-left: 5px solid #00ffcc;
+      box-shadow: 0 0 10px rgba(0, 255, 204, 0.2);
+    }
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85em;
+      margin-top: 5px;
+    }
+    .delete {
+      background: none;
+      border: none;
+      color: #ff4d4d;
+      cursor: pointer;
+      font-size: 1.2em;
+    }
+    .total {
+      text-align: center;
+      font-size: 1.5em;
+      margin-top: 20px;
+      color: #00ffcc;
+      text-shadow: 0 0 8px #00ffcc;
+    }
+    @media (max-width: 600px) {
+      .controls {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>NeonBudget</h1>
+    <form id="expense-form">
+      <input type="number" id="amount" placeholder="Сума" required min="0.01" step="0.01">
+      <input type="text" id="category" placeholder="Категорія" required>
+      <input type="text" id="description" placeholder="Опис (необов'язково)">
+      <input type="date" id="date" required>
+      <button type="submit">💸 Додати</button>
+    </form>
+    <div class="controls">
+      <select id="filter">
+        <option value="all">Усі категорії</option>
+      </select>
+      <button id="export">📤 Експорт JSON</button>
+    </div>
+    <ul id="expense-list"></ul>
+    <div class="total">Загальна сума: <span id="total">0</span> грн</div>
+  </div>
+  <script>
+    const form = document.getElementById('expense-form');
+    const list = document.getElementById('expense-list');
+    const totalDisplay = document.getElementById('total');
+    const filter = document.getElementById('filter');
+    const exportBtn = document.getElementById('export');
+    let expenses = JSON.parse(localStorage.getItem('neonBudgetExpenses')) || [];
+    function saveExpenses() {
+      localStorage.setItem('neonBudgetExpenses', JSON.stringify(expenses));
+    }
+    function renderExpenses() {
+      list.innerHTML = '';
+      const selected = filter.value;
+      let total = 0;
+      const cats = new Set();
+      expenses.forEach(exp => {
+        cats.add(exp.category);
+        if (selected !== 'all' && exp.category !== selected) return;
+        const li = document.createElement('li');
+        li.className = 'expense-item';
+        li.innerHTML = `
+          <div><strong>${exp.amount.toFixed(2)} грн</strong> — ${exp.category}</div>
+          <div>${exp.description || ''}</div>
+          <div class="meta">📅 ${exp.date} <button data-id="${exp.id}" class="delete">🗑</button></div>
+        `;
+        list.appendChild(li);
+        total += exp.amount;
+      });
+      totalDisplay.textContent = total.toFixed(2);
+      filter.innerHTML = '<option value="all">Усі категорії</option>';
+      cats.forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat;
+        opt.textContent = cat;
+        filter.appendChild(opt);
+      });
+    }
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const amount = parseFloat(form.amount.value);
+      const category = form.category.value.trim();
+      const description = form.description.value.trim();
+      const date = form.date.value;
+      if (!amount || amount <= 0 || !category || !date) return;
+      expenses.push({ id: Date.now(), amount, category, description, date });
+      saveExpenses();
+      form.reset();
+      renderExpenses();
+    });
+    list.addEventListener('click', e => {
+      if (e.target.classList.contains('delete')) {
+        const id = +e.target.dataset.id;
+        expenses = expenses.filter(exp => exp.id !== id);
+        saveExpenses();
+        renderExpenses();
+      }
+    });
+    filter.addEventListener('change', renderExpenses);
+    exportBtn.addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(expenses, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'neonbudget-data.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+    renderExpenses();
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js')
+          .then(reg => console.log('SW зареєстровано'))
+          .catch(err => console.error('SW помилка:', err));
+      });
+    }
+  </script>
+</body>
+</html>
